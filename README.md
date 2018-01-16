@@ -1,2 +1,2 @@
-# wma-to-mp3
+# WMA to MP3
 Convert WMA files to MP3.
