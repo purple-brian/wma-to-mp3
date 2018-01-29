@@ -61,7 +61,10 @@ namespace ConvertWMAToMP3
 
         static void ConvertFile(string sourceFileName, string destFileName)
         {
-            IMFMetadata metadata = GetMetadata(sourceFileName);
+            IMFMediaSource mediaSource = GetMediaSource(sourceFileName);
+            int bitRate = GetBitRate(mediaSource);
+            IMFMetadata metadata = GetMetadata(mediaSource);
+
             ID3TagData tagData = new ID3TagData()
             {
                 Title = GetStringProperty(metadata, "Title"),
@@ -74,17 +77,19 @@ namespace ConvertWMAToMP3
             };
             COMBase.SafeRelease(metadata);
             metadata = null;
+            COMBase.SafeRelease(mediaSource);
+            mediaSource = null;
 
             using (AudioFileReader reader = new AudioFileReader(sourceFileName))
             {
-                using (LameMP3FileWriter writer = new LameMP3FileWriter(destFileName, reader.WaveFormat, 192, tagData))
+                using (LameMP3FileWriter writer = new LameMP3FileWriter(destFileName, reader.WaveFormat, bitRate, tagData))
                 {
                     reader.CopyTo(writer);
                 }
             }
         }
 
-        static IMFMetadata GetMetadata(string sourceFileName)
+        static IMFMediaSource GetMediaSource(string sourceFileName)
         {
             HResult hr;
 
@@ -100,14 +105,25 @@ namespace ConvertWMAToMP3
             COMBase.SafeRelease(sourceResolver);
             sourceResolver = null;
 
-            // Get an IMFMetadata.
+            return mediaSource;
+        }
+
+        static IMFMetadata GetMetadata(IMFMediaSource mediaSource)
+        {
+            HResult hr;
+
+            // Get IMFPresentationDescriptor.
             IMFPresentationDescriptor presentationDescriptor;
             hr = mediaSource.CreatePresentationDescriptor(out presentationDescriptor);
             MFError.ThrowExceptionForHR(hr);
+
+            // Get IMFMetadataProvider.
             object provider;
             hr = MFExtern.MFGetService(mediaSource, MFServices.MF_METADATA_PROVIDER_SERVICE, typeof(IMFMetadataProvider).GUID, out provider);
             MFError.ThrowExceptionForHR(hr);
             IMFMetadataProvider metadataProvider = (IMFMetadataProvider)provider;
+
+            // Get IMFMetadata.
             IMFMetadata metadata;
             hr = metadataProvider.GetMFMetadata(presentationDescriptor, 0, 0, out metadata);
             MFError.ThrowExceptionForHR(hr);
@@ -117,6 +133,34 @@ namespace ConvertWMAToMP3
             metadataProvider = null;
 
             return metadata;
+        }
+
+        static int GetBitRate(IMFMediaSource mediaSource)
+        {
+            HResult hr;
+
+            // Get IMFPresentationDescriptor.
+            IMFPresentationDescriptor presentationDescriptor;
+            hr = mediaSource.CreatePresentationDescriptor(out presentationDescriptor);
+            MFError.ThrowExceptionForHR(hr);
+
+            // Get IMFStreamDescriptor.
+            bool isStreamSelected;
+            IMFStreamDescriptor streamDescriptor;
+            hr = presentationDescriptor.GetStreamDescriptorByIndex(0, out isStreamSelected, out streamDescriptor);
+            MFError.ThrowExceptionForHR(hr);
+
+            // Get bit rate.
+            int bitRate;
+            hr = streamDescriptor.GetUINT32(MFAttributesClsid.MF_SD_ASF_EXTSTRMPROP_AVG_DATA_BITRATE, out bitRate);
+            MFError.ThrowExceptionForHR(hr);
+            bitRate /= 1000;
+            if (bitRate <= 0)
+            {
+                throw new ApplicationException($"Invalid bit rate: {bitRate}");
+            }
+
+            return bitRate;
         }
 
         static string GetStringProperty(IMFMetadata metadata, string name)
