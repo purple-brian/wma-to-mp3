@@ -46,9 +46,7 @@ namespace ConvertWMAToMP3
             foreach (string wmaFile in wmaFiles)
             {
                 string mp3File = Path.Combine(destDirectory, Path.ChangeExtension(Path.GetFileName(wmaFile), "mp3"));
-                Console.Write($"Converting '{wmaFile}'... ");
                 ConvertFile(wmaFile, mp3File);
-                Console.WriteLine($"wrote '{mp3File}'.");
             }
 
             IEnumerable<string> directories = Directory.EnumerateDirectories(sourceDirectory);
@@ -61,6 +59,9 @@ namespace ConvertWMAToMP3
 
         static void ConvertFile(string sourceFileName, string destFileName)
         {
+            Console.WriteLine($"------------------------------------------------------------");
+            Console.WriteLine($"      Source: {sourceFileName}");
+
             IMFMediaSource mediaSource = GetMediaSource(sourceFileName);
             int bitRate = GetBitRate(mediaSource);
             IMFMetadata metadata = GetMetadata(mediaSource);
@@ -80,6 +81,15 @@ namespace ConvertWMAToMP3
             COMBase.SafeRelease(mediaSource);
             mediaSource = null;
 
+            Console.WriteLine($"       Title: {tagData.Title}");
+            Console.WriteLine($"Album artist: {tagData.AlbumArtist}");
+            Console.WriteLine($"      Artist: {tagData.Artist}");
+            Console.WriteLine($"       Album: {tagData.Album}");
+            Console.WriteLine($"        Year: {tagData.Year}");
+            Console.WriteLine($"       Genre: {tagData.Genre}");
+            Console.WriteLine($"       Track: {tagData.Track}");
+            Console.WriteLine($"    Bit rate: {bitRate}");
+
             using (AudioFileReader reader = new AudioFileReader(sourceFileName))
             {
                 using (LameMP3FileWriter writer = new LameMP3FileWriter(destFileName, reader.WaveFormat, bitRate, tagData))
@@ -87,6 +97,8 @@ namespace ConvertWMAToMP3
                     reader.CopyTo(writer);
                 }
             }
+
+            Console.WriteLine($" Destination: {destFileName}");
         }
 
         static IMFMediaSource GetMediaSource(string sourceFileName)
